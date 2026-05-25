@@ -1,8 +1,11 @@
+import os
 import re
 import sys
 import json
 import dukpy
 from prowser.html_parser import HTMLParser, Element, Text
+
+JS_DEBUG = bool(os.environ.get("PROWSER_JS_DEBUG"))
 
 RUNTIME_JS = """
 var window = this;
@@ -54,7 +57,7 @@ function __dispatch_event(handle, type) {
     var evt = { type: type, _prevented: false, preventDefault: function() { this._prevented = true; } };
     var node = __node(handle);
     for (var i = 0; i < fns.length; i++) {
-        try { fns[i].call(node, evt); } catch (e) { console.log("event handler error: " + e); }
+        try { fns[i].call(node, evt); } catch (e) {}
     }
     return evt._prevented;
 }
@@ -127,7 +130,8 @@ class JSEngine:
         return self.node_handles[key]
 
     def log(self, message):
-        print(f"[js] {message}", flush=True)
+        if JS_DEBUG:
+            print(f"[js] {message}", flush=True)
 
     def query_selector_all(self, selector_text):
         selectors = [s.strip() for s in selector_text.split(",") if s.strip()]
@@ -172,7 +176,8 @@ class JSEngine:
         try:
             self.interp.evaljs(code)
         except Exception as e:
-            print(f"[js] script error: {e}", file=sys.stderr, flush=True)
+            if JS_DEBUG:
+                print(f"[js] script error: {str(e).splitlines()[0]}", file=sys.stderr, flush=True)
 
     def dispatch_event(self, node, event_type):
         handle = self.node_handles.get(id(node))
@@ -181,5 +186,6 @@ class JSEngine:
         try:
             return bool(self.interp.evaljs(f"__dispatch_event({handle}, {json.dumps(event_type)})"))
         except Exception as e:
-            print(f"[js] dispatch error: {e}", file=sys.stderr, flush=True)
+            if JS_DEBUG:
+                print(f"[js] dispatch error: {str(e).splitlines()[0]}", file=sys.stderr, flush=True)
             return False

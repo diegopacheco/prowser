@@ -308,8 +308,7 @@ class Browser:
             return
         try:
             self.js = JSEngine(self)
-        except Exception as e:
-            print(f"[js] init error: {e}", file=sys.stderr, flush=True)
+        except Exception:
             self.js = None
             return
         for code in scripts:
