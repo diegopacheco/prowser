@@ -1,0 +1,26 @@
+prowser/browser.py
+  s_b98a561fe2d2f3::t_148d3494957805 175
+test_prowser.py
+  s_b98a561fe2d2f3::t_034a47ecbcf79e 5,77-111,123-125
+prowser/layout.py
+  s_b98a561fe2d2f3::t_540031f4a5edc0 113-114
+  s_b98a561fe2d2f3::t_99bf5220ace86e 1,6,9-15,116,152-187,210-219,222-223,242-243,246-247,251,259-261,270-271
+prowser/network.py
+  s_b98a561fe2d2f3::t_9383cbcfafe72e 4-31,86-87,99-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "1a5a533c3322bb78a14f3ce957c6b6e64c400934",
+  "prompts": {},
+  "sessions": {
+    "s_b98a561fe2d2f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e5e35-18db-7eb3-8636-b5c4c8d485c6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
