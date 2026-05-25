@@ -1,0 +1,22 @@
+.gitignore
+  s_b98a561fe2d2f3::t_d259e1b95118bc 28
+prowser/browser.py
+  s_b98a561fe2d2f3::t_feb8ad41f905cc 23,26,28-29,31,36
+  s_b98a561fe2d2f3::t_d259e1b95118bc 21,25,30,32,35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "7e1be2dfae44520bf1875b1d216cda359c118403",
+  "prompts": {},
+  "sessions": {
+    "s_b98a561fe2d2f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e5e35-18db-7eb3-8636-b5c4c8d485c6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
