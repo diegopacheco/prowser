@@ -87,7 +87,8 @@ class Browser:
         self.loading = False
         self.color_cache = {}
 
-        self.input_widgets = {}
+        self.focused_input = None
+        self.input_text = {}
         self.images = {}
         self.image_pending = set()
         self.image_failed = set()
@@ -99,8 +100,10 @@ class Browser:
         self.last_width = 800
         self.last_height = 600
 
+        self.canvas.config(takefocus=1)
         self.canvas.bind("<Configure>", self.on_resize)
         self.canvas.bind("<Button-1>", self.on_click)
+        self.canvas.bind("<Key>", self.on_key)
         self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)
         self.canvas.bind("<Button-4>", lambda e: self.scroll(-40))
         self.canvas.bind("<Button-5>", lambda e: self.scroll(40))
@@ -128,6 +131,8 @@ class Browser:
                 self.scroll(-int(event.delta / 120) * 40)
 
     def scroll_key(self, amount):
+        if self.focused_input is not None:
+            return
         if isinstance(self.root.focus_get(), tkinter.Entry):
             return
         self.scroll(amount)
@@ -173,6 +178,8 @@ class Browser:
         self.images.clear()
         self.image_pending.clear()
         self.image_failed.clear()
+        self.focused_input = None
+        self.input_text.clear()
         self.url = url
         self.load_id += 1
         load_id = self.load_id
@@ -308,15 +315,6 @@ class Browser:
 
     def render(self):
         self.canvas.delete("all")
-        active_inputs = {
-            item["node"]
-            for item in self.display_list
-            if item["type"] == "control" and item["input_type"] in TEXT_INPUT_TYPES
-        }
-        for node in list(self.input_widgets):
-            if node not in active_inputs:
-                self.input_widgets[node].destroy()
-                del self.input_widgets[node]
         for item in self.display_list:
             if item["type"] == "image":
                 node = item["node"]
@@ -378,37 +376,46 @@ class Browser:
             self.get_font_metrics(font_size, font_weight, font_style, "")
         return self.font_cache[key]
 
-    def make_input_entry(self, item):
-        font = self.get_font(item["font_size"], item["font_weight"], item["font_style"])
-        entry = tkinter.Entry(self.canvas, font=font, relief="solid", bd=1,
-                              bg="#ffffff", fg="#000000", insertbackground="#000000")
-        value = item["node"].attributes.get("value") or ""
-        if value:
-            entry.insert(0, value)
-        entry.bind("<Return>", lambda e, n=item["node"]: self.submit_form(n))
-        return entry
+    def input_value(self, item):
+        node = item["node"]
+        if node in self.input_text:
+            return self.input_text[node]
+        return node.attributes.get("value") or ""
 
     def draw_control(self, item):
+        font = self.get_font(item["font_size"], item["font_weight"], item["font_style"])
+        top = item["y"] - self.scroll_y
         if item["input_type"] in TEXT_INPUT_TYPES:
-            entry = self.input_widgets.get(item["node"])
-            if entry is None:
-                entry = self.make_input_entry(item)
-                self.input_widgets[item["node"]] = entry
-            self.canvas.create_window(
-                item["x"], item["y"] - self.scroll_y,
-                anchor="nw", window=entry,
-                width=item["w"], height=item["h"]
-            )
+            focused = self.focused_input is item["node"]
+            outline = "#1a73e8" if focused else "#9a9a9a"
+            try:
+                self.canvas.create_rectangle(
+                    item["x"], top, item["x"] + item["w"], top + item["h"],
+                    fill="#ffffff", outline=outline
+                )
+            except Exception:
+                pass
+            text = self.input_value(item)
+            max_text_w = item["w"] - 12
+            while text and font.measure(text) > max_text_w:
+                text = text[1:]
+            text_x = item["x"] + 6
+            text_y = item["y"] + (item["h"] - font.metrics("linespace")) // 2 - self.scroll_y
+            try:
+                self.canvas.create_text(text_x, text_y, text=text, font=font, fill="#000000", anchor="nw")
+            except Exception:
+                pass
+            if focused:
+                cursor_x = text_x + font.measure(text)
+                self.canvas.create_line(cursor_x, text_y, cursor_x, text_y + font.metrics("linespace"), fill="#000000")
             return
         try:
             self.canvas.create_rectangle(
-                item["x"], item["y"] - self.scroll_y,
-                item["x"] + item["w"], item["y"] + item["h"] - self.scroll_y,
+                item["x"], top, item["x"] + item["w"], top + item["h"],
                 fill="#f0f0f0", outline="#9a9a9a"
             )
         except Exception:
             pass
-        font = self.get_font(item["font_size"], item["font_weight"], item["font_style"])
         text_color = self.normalize_color(item["color"], "#000000")
         try:
             self.canvas.create_text(
@@ -504,11 +511,19 @@ class Browser:
     def on_click(self, event):
         click_x = event.x
         click_y = event.y + self.scroll_y
+        self.focused_input = None
 
         for item in self.display_list:
-            if item["type"] == "control" and item["input_type"] in BUTTON_INPUT_TYPES:
-                if item["x"] <= click_x <= item["x"] + item["w"] and item["y"] <= click_y <= item["y"] + item["h"]:
+            if item["type"] == "control":
+                if not (item["x"] <= click_x <= item["x"] + item["w"] and item["y"] <= click_y <= item["y"] + item["h"]):
+                    continue
+                if item["input_type"] in BUTTON_INPUT_TYPES:
                     self.submit_form(item["node"])
+                    return
+                if item["input_type"] in TEXT_INPUT_TYPES:
+                    self.focused_input = item["node"]
+                    self.canvas.focus_set()
+                    self.render()
                     return
 
         clicked_node = None
@@ -522,6 +537,10 @@ class Browser:
                 if item["x"] <= click_x <= item["x"] + w_val and item["y"] <= click_y <= item["y"] + h_val:
                     clicked_node = item["node"]
                     break
+            elif item["type"] == "image":
+                if item["x"] <= click_x <= item["x"] + item["w"] and item["y"] <= click_y <= item["y"] + item["h"]:
+                    clicked_node = item["node"]
+                    break
 
         if clicked_node:
             anchor = get_anchor_node(clicked_node)
@@ -531,6 +550,28 @@ class Browser:
                 self.address_entry.delete(0, tkinter.END)
                 self.address_entry.insert(0, new_url)
                 self.load(new_url)
+                return
+        self.render()
+
+    def on_key(self, event):
+        if self.focused_input is None:
+            return
+        node = self.focused_input
+        current = self.input_text.get(node, node.attributes.get("value") or "")
+        keysym = event.keysym
+        if keysym == "Return":
+            self.submit_form(node)
+            return "break"
+        if keysym == "BackSpace":
+            self.input_text[node] = current[:-1]
+        elif keysym in ("Escape", "Tab"):
+            self.focused_input = None
+        elif len(event.char) == 1 and event.char.isprintable():
+            self.input_text[node] = current + event.char
+        else:
+            return "break"
+        self.render()
+        return "break"
 
     def resolve_url(self, href):
         if href.startswith("http://") or href.startswith("https://"):
@@ -553,8 +594,7 @@ class Browser:
         form = get_form_node(node)
         if not form:
             return
-        text_values = {n: w.get() for n, w in self.input_widgets.items()}
-        params = collect_form_params(form, node, text_values)
+        params = collect_form_params(form, node, dict(self.input_text))
         action = form.attributes.get("action") or ""
         url = self.resolve_url(action) if action else self.url
         query = urlencode(params)
