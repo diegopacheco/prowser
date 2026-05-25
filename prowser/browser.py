@@ -1,7 +1,9 @@
 import queue
+import sys
 import threading
 import tkinter
 import tkinter.font
+from html import escape
 from prowser.network import request, parse_url
 from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style, DEFAULT_STYLESHEET
@@ -143,7 +145,10 @@ class Browser:
         if error:
             self.show_error(f"Error loading {url}: {error}")
             return
-        self.render_html(body)
+        try:
+            self.render_html(body)
+        except Exception as e:
+            self.show_error(f"Error rendering {url}: {e}")
 
     def render_html(self, body):
         parser = HTMLParser(body)
@@ -299,7 +304,8 @@ class Browser:
                 return f"{scheme}://{host}:{port}{parent_path}/{href}"
 
     def show_error(self, message):
-        error_html = f"<html><body><h1>Error</h1><p>{message}</p></body></html>"
+        print(f"[prowser] {message}", file=sys.stderr, flush=True)
+        error_html = f"<html><body><h1>Error</h1><p>{escape(message)}</p></body></html>"
         parser = HTMLParser(error_html)
         self.dom = parser.parse()
         rules = parse_css(DEFAULT_STYLESHEET)
