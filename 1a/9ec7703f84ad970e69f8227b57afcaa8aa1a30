@@ -1,0 +1,27 @@
+prowser/browser.py
+  s_88d33490a09e66::t_b72d2f7803b3c5 27,30
+  s_88d33490a09e66::t_68bbfd9c553978 400,404,407
+  s_88d33490a09e66::t_623dbdcf2c15d1 399,401-403,411
+README.md
+  s_88d33490a09e66::t_cad13993205764 11,14-17
+  s_88d33490a09e66::t_f1563abeab137f 23
+  s_88d33490a09e66::t_b1c93b6a4ffc61 3-6
+prowser/layout.py
+  s_88d33490a09e66::t_9c9fcea36d748d 192-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "1a9ec7703f84ad970e69f8227b57afcaa8aa1a30",
+  "prompts": {},
+  "sessions": {
+    "s_88d33490a09e66": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c55e575a-c47f-4661-896d-4739be261181",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
