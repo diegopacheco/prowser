@@ -45,6 +45,7 @@ class Browser:
         self.load_id = 0
         self.load_queue = queue.Queue()
         self.loading = False
+        self.color_cache = {}
 
         self.last_width = 800
         self.last_height = 600
@@ -198,15 +199,36 @@ class Browser:
         f = self.font_cache[key]
         return f.measure(text), f.metrics("linespace")
 
+    def normalize_color(self, color, fallback):
+        key = (color, fallback)
+        if key in self.color_cache:
+            return self.color_cache[key]
+        if color is None:
+            self.color_cache[key] = fallback
+            return fallback
+        val = str(color).strip()
+        if not val:
+            self.color_cache[key] = fallback
+            return fallback
+        try:
+            self.root.winfo_rgb(val)
+            self.color_cache[key] = val
+            return val
+        except Exception:
+            self.color_cache[key] = fallback
+            return fallback
+
     def render(self):
         self.canvas.delete("all")
         for item in self.display_list:
             if item["type"] == "rect":
                 try:
+                    fill_color = self.normalize_color(item["color"], "")
+                    outline_color = self.normalize_color(item.get("outline", ""), "")
                     self.canvas.create_rectangle(
                         item["x"], item["y"] - self.scroll_y,
                         item["x"] + item["w"], item["y"] + item["h"] - self.scroll_y,
-                        fill=item["color"], outline=item.get("outline", "")
+                        fill=fill_color, outline=outline_color
                     )
                 except Exception:
                     pass
@@ -216,18 +238,20 @@ class Browser:
                 key = (item["font_size"], weight_map, slant_map)
                 f = self.font_cache[key]
                 try:
+                    text_color = self.normalize_color(item["color"], "#000000")
                     self.canvas.create_text(
                         item["x"], item["y"] - self.scroll_y,
-                        text=item["text"], font=f, fill=item["color"], anchor="nw"
+                        text=item["text"], font=f, fill=text_color, anchor="nw"
                     )
                 except Exception:
                     pass
             elif item["type"] == "line":
                 try:
+                    line_color = self.normalize_color(item["color"], "#000000")
                     self.canvas.create_line(
                         item["x1"], item["y1"] - self.scroll_y,
                         item["x2"], item["y2"] - self.scroll_y,
-                        fill=item["color"]
+                        fill=line_color
                     )
                 except Exception:
                     pass
