@@ -1,0 +1,19 @@
+prowser/browser.py
+  s_b98a561fe2d2f3::t_6ba3f6b6bbb9c2 23,26-27,29-30,32-33,62,64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "9d16089d95da3aa9299cf941b944c5d5cd662bd1",
+  "prompts": {},
+  "sessions": {
+    "s_b98a561fe2d2f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e5e35-18db-7eb3-8636-b5c4c8d485c6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
