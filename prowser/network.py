@@ -59,13 +59,12 @@ def request(url, redirect_limit=5):
         raise Exception("Too many redirects")
 
     scheme, host, port, path = parse_url(url)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.create_connection((host, port), timeout=15)
     
     if scheme == "https":
         ctx = ssl.create_default_context()
         s = ctx.wrap_socket(s, server_hostname=host)
-
-    s.connect((host, port))
+        s.settimeout(15)
     
     req_headers = f"GET {path} HTTP/1.1\r\n"
     req_headers += f"Host: {host}\r\n"

@@ -1,3 +1,5 @@
+import queue
+import threading
 import tkinter
 import tkinter.font
 from prowser.network import request, parse_url
@@ -44,6 +46,9 @@ class Browser:
         self.display_list = []
         self.scroll_y = 0
         self.url = ""
+        self.load_id = 0
+        self.load_queue = queue.Queue()
+        self.loading = False
 
         self.last_width = 800
         self.last_height = 600
@@ -109,12 +114,40 @@ class Browser:
 
     def load(self, url):
         self.url = url
+        self.load_id += 1
+        load_id = self.load_id
+        self.loading = True
+        self.go_button.config(state="disabled")
+        self.show_message(f"Loading {url}")
+        threading.Thread(target=self.fetch_url, args=(load_id, url), daemon=True).start()
+        self.root.after(50, self.check_load_result)
+
+    def fetch_url(self, load_id, url):
         try:
             status, headers, body = request(url)
         except Exception as e:
-            self.show_error(f"Error loading {url}: {e}")
+            self.load_queue.put((load_id, url, None, e))
             return
+        self.load_queue.put((load_id, url, body, None))
 
+    def check_load_result(self):
+        while True:
+            try:
+                load_id, url, body, error = self.load_queue.get_nowait()
+            except queue.Empty:
+                if self.loading:
+                    self.root.after(50, self.check_load_result)
+                return
+            if load_id == self.load_id:
+                break
+        self.loading = False
+        self.go_button.config(state="normal")
+        if error:
+            self.show_error(f"Error loading {url}: {error}")
+            return
+        self.render_html(body)
+
+    def render_html(self, body):
         parser = HTMLParser(body)
         self.dom = parser.parse()
 
@@ -135,6 +168,10 @@ class Browser:
 
         compute_style(self.dom, rules)
         self.layout_and_paint()
+
+    def show_message(self, message):
+        message_html = f"<html><body><p>{message}</p></body></html>"
+        self.render_html(message_html)
 
     def layout_and_paint(self):
         from prowser.layout import build_layout_tree
