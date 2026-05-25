@@ -1,0 +1,41 @@
+test_prowser.py
+  s_88d33490a09e66::t_ad421f8a2de6c6 178
+  s_88d33490a09e66::t_7a1f3223cc4ca2 132-156
+requirements.txt
+  s_88d33490a09e66::t_b9c3fa5a921dcd 1
+run.sh
+  s_88d33490a09e66::t_d7a51002e43d5a 3-7,10-14,17-21
+prowser/browser.py
+  s_88d33490a09e66::t_2e747c35944087 81-83,85
+  s_88d33490a09e66::t_dc5e2ca3665783 614-624
+  s_88d33490a09e66::t_2c41b496f5ec67 271,274,277,291,293-294,297-320
+  s_88d33490a09e66::t_79eff7ec164355 107-108
+  s_88d33490a09e66::t_3f4057c443489d 429
+  s_88d33490a09e66::t_f9cba7a1405c7f 157-179
+  s_88d33490a09e66::t_c11740d541fdbb 13-17
+  s_88d33490a09e66::t_39c3df27b78d44 267
+README.md
+  s_88d33490a09e66::t_f4d83686e52a26 14,17
+  s_88d33490a09e66::t_3e5bd67f156ece 25
+  s_88d33490a09e66::t_da85f06790d0fb 5
+prowser/js_engine.py
+  s_88d33490a09e66::t_f793420b8220a5 1,4,6-174,176-181,183,185
+  s_88d33490a09e66::t_3af930cff923f2 175,182,184
+  s_88d33490a09e66::t_6ac7c6835c584f 2-3,5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "3b9e8da5e5f50e73322f851cb3a7115ea7a6d5b1",
+  "prompts": {},
+  "sessions": {
+    "s_88d33490a09e66": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c55e575a-c47f-4661-896d-4739be261181",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
