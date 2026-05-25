@@ -1,0 +1,35 @@
+prowser/layout.py
+  s_88d33490a09e66::t_cb46f359385dc4 213,218-224,226,229-230
+  s_88d33490a09e66::t_05fdc425eb0f5c 185-186
+prowser/browser.py
+  s_88d33490a09e66::t_13410233d7d887 94-96
+  s_88d33490a09e66::t_de55bc14c16d48 7,12-21
+  s_88d33490a09e66::t_9a3e513ba71077 23-41
+  s_88d33490a09e66::t_a7bf17a21ff3e7 83-84
+  s_88d33490a09e66::t_a394f3f11c314b 266-274,276-278
+  s_88d33490a09e66::t_0decc26aa9f5e1 116-120
+  s_88d33490a09e66::t_51f980e60c9814 313-363,368-372
+  s_88d33490a09e66::t_2cf42fdab43b5a 412-415,418-425
+  s_88d33490a09e66::t_fc17f34e9384dd 416-417
+test_prowser.py
+  s_88d33490a09e66::t_618186acc62ee8 152
+  s_88d33490a09e66::t_d2fb3c6940f0d3 99-104
+  s_88d33490a09e66::t_28c01edc5cd069 107-131
+  s_88d33490a09e66::t_b90a1463fba414 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "ae355b9077e9784c381f05240c912449828ce0ae",
+  "prompts": {},
+  "sessions": {
+    "s_88d33490a09e66": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c55e575a-c47f-4661-896d-4739be261181",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
