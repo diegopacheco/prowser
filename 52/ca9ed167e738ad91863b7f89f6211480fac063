@@ -1,0 +1,25 @@
+prowser/browser.py
+  s_b98a561fe2d2f3::t_f0083a6235b0c5 86,89-107
+test_prowser.py
+  s_b98a561fe2d2f3::t_4d9208e0f128c2 4,76-82,87
+run.sh
+  s_b98a561fe2d2f3::t_6310a078667091 2
+prowser/main.py
+  s_b98a561fe2d2f3::t_8ff2d96dc0382a 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "52ca9ed167e738ad91863b7f89f6211480fac063",
+  "prompts": {},
+  "sessions": {
+    "s_b98a561fe2d2f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e5e35-18db-7eb3-8636-b5c4c8d485c6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
