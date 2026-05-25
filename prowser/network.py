@@ -54,26 +54,30 @@ def parse_url(url):
 
     return scheme, host, port, path
 
-def request(url, redirect_limit=5):
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+def fetch(url, redirect_limit=5):
     if redirect_limit <= 0:
         raise Exception("Too many redirects")
 
     scheme, host, port, path = parse_url(url)
     s = socket.create_connection((host, port), timeout=15)
-    
+
     if scheme == "https":
         ctx = ssl.create_default_context()
         s = ctx.wrap_socket(s, server_hostname=host)
         s.settimeout(15)
-    
+
     req_headers = f"GET {path} HTTP/1.1\r\n"
     req_headers += f"Host: {host}\r\n"
     req_headers += "Connection: close\r\n"
-    req_headers += "User-Agent: prowser\r\n"
+    req_headers += f"User-Agent: {USER_AGENT}\r\n"
+    req_headers += "Accept: text/html,image/png,image/gif,image/*,*/*\r\n"
+    req_headers += "Accept-Encoding: identity\r\n"
     req_headers += "\r\n"
-    
+
     s.send(req_headers.encode("utf-8"))
-    
+
     response = bytearray()
     while True:
         chunk = s.recv(4096)
@@ -81,15 +85,15 @@ def request(url, redirect_limit=5):
             break
         response.extend(chunk)
     s.close()
-    
+
     header_bytes, _, body_bytes = bytes(response).partition(b"\r\n\r\n")
     header_part = header_bytes.decode("iso-8859-1", errors="replace")
-    
+
     header_lines = header_part.split("\r\n")
     status_line = header_lines[0]
     _, status_code_str, _ = status_line.split(" ", 2)
     status_code = int(status_code_str)
-    
+
     headers = {}
     for line in header_lines[1:]:
         if ":" in line:
@@ -99,17 +103,19 @@ def request(url, redirect_limit=5):
     if headers.get("transfer-encoding", "").lower() == "chunked":
         body_bytes = decode_chunked(body_bytes)
 
+    if status_code in (301, 302, 303, 307, 308) and "location" in headers:
+        loc = headers["location"]
+        if not (loc.startswith("http://") or loc.startswith("https://")):
+            if loc.startswith("/"):
+                loc = f"{scheme}://{host}:{port}{loc}"
+            else:
+                parent_path = path.rsplit("/", 1)[0]
+                loc = f"{scheme}://{host}:{port}{parent_path}/{loc}"
+        return fetch(loc, redirect_limit - 1)
+
+    return status_code, headers, body_bytes
+
+def request(url, redirect_limit=5):
+    status_code, headers, body_bytes = fetch(url, redirect_limit)
     body = body_bytes.decode(get_charset(headers), errors="replace")
-            
-    if status_code in (301, 302, 303, 307, 308):
-        if "location" in headers:
-            loc = headers["location"]
-            if not (loc.startswith("http://") or loc.startswith("https://")):
-                if loc.startswith("/"):
-                    loc = f"{scheme}://{host}:{port}{loc}"
-                else:
-                    parent_path = path.rsplit("/", 1)[0]
-                    loc = f"{scheme}://{host}:{port}{parent_path}/{loc}"
-            return request(loc, redirect_limit - 1)
-            
     return status_code, headers, body

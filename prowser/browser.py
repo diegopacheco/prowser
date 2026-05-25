@@ -1,11 +1,12 @@
+import base64
 import queue
 import sys
 import threading
 import tkinter
 import tkinter.font
 from html import escape
-from urllib.parse import urlencode
-from prowser.network import request, parse_url
+from urllib.parse import urlencode, unquote_to_bytes
+from prowser.network import request, fetch, parse_url
 from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style, DEFAULT_STYLESHEET
 
@@ -56,8 +57,14 @@ class Browser:
         self.nav_frame = tkinter.Frame(self.root, bg="#eeeeee")
         self.nav_frame.pack(fill="x")
 
+        self.back_button = tkinter.Button(self.nav_frame, text="←", command=self.go_back, state="disabled")
+        self.back_button.pack(side="left", padx=(8, 0), pady=4)
+
+        self.forward_button = tkinter.Button(self.nav_frame, text="→", command=self.go_forward, state="disabled")
+        self.forward_button.pack(side="left", padx=(2, 4), pady=4)
+
         self.address_label = tkinter.Label(self.nav_frame, text="URL", bg="#eeeeee", fg="#000000")
-        self.address_label.pack(side="left", padx=(8, 4), pady=6)
+        self.address_label.pack(side="left", padx=(4, 4), pady=6)
 
         self.go_button = tkinter.Button(self.nav_frame, text="Go", command=self.go)
         self.go_button.pack(side="right", padx=(4, 8), pady=4)
@@ -81,6 +88,13 @@ class Browser:
         self.color_cache = {}
 
         self.input_widgets = {}
+        self.images = {}
+        self.image_pending = set()
+        self.image_failed = set()
+        self.image_queue = queue.Queue()
+        self.image_poll_active = False
+        self.history = []
+        self.history_index = -1
 
         self.last_width = 800
         self.last_height = 600
@@ -150,7 +164,15 @@ class Browser:
         self.set_address(url)
         self.load(url)
 
-    def load(self, url):
+    def load(self, url, push=True):
+        if push:
+            del self.history[self.history_index + 1:]
+            self.history.append(url)
+            self.history_index = len(self.history) - 1
+        self.update_nav_buttons()
+        self.images.clear()
+        self.image_pending.clear()
+        self.image_failed.clear()
         self.url = url
         self.load_id += 1
         load_id = self.load_id
@@ -159,6 +181,24 @@ class Browser:
         self.show_message(f"Loading {url}")
         threading.Thread(target=self.fetch_url, args=(load_id, url), daemon=True).start()
         self.root.after(50, self.check_load_result)
+
+    def go_back(self):
+        if self.history_index > 0:
+            self.history_index -= 1
+            url = self.history[self.history_index]
+            self.set_address(url)
+            self.load(url, push=False)
+
+    def go_forward(self):
+        if self.history_index < len(self.history) - 1:
+            self.history_index += 1
+            url = self.history[self.history_index]
+            self.set_address(url)
+            self.load(url, push=False)
+
+    def update_nav_buttons(self):
+        self.back_button.config(state="normal" if self.history_index > 0 else "disabled")
+        self.forward_button.config(state="normal" if self.history_index < len(self.history) - 1 else "disabled")
 
     def fetch_url(self, load_id, url):
         try:
@@ -214,10 +254,10 @@ class Browser:
         message_html = f"<html><body><p>{message}</p></body></html>"
         self.render_html(message_html)
 
-    def layout_and_paint(self):
+    def layout_and_paint(self, reset_scroll=True):
         from prowser.layout import build_layout_tree
         self.layout_tree = build_layout_tree(self.dom)
-        
+
         width = self.canvas.winfo_width()
         if width <= 1:
             width = 800
@@ -230,7 +270,12 @@ class Browser:
 
         self.display_list = []
         self.layout_tree.paint(self.display_list)
-        self.scroll_y = 0
+        if reset_scroll:
+            self.scroll_y = 0
+        else:
+            doc_height = self.layout_tree.height
+            view_height = self.canvas.winfo_height()
+            self.scroll_y = max(0, min(self.scroll_y, max(0, doc_height - view_height)))
         self.render()
 
     def get_font_metrics(self, size, weight, style, text):
@@ -273,7 +318,19 @@ class Browser:
                 self.input_widgets[node].destroy()
                 del self.input_widgets[node]
         for item in self.display_list:
-            if item["type"] == "control":
+            if item["type"] == "image":
+                node = item["node"]
+                photo = self.images.get(node)
+                if photo is not None:
+                    try:
+                        self.canvas.create_image(item["x"], item["y"] - self.scroll_y, anchor="nw", image=photo)
+                    except Exception:
+                        self.draw_image_placeholder(item)
+                else:
+                    if node not in self.image_failed and node not in self.image_pending:
+                        self.start_image_load(node)
+                    self.draw_image_placeholder(item)
+            elif item["type"] == "control":
                 self.draw_control(item)
             elif item["type"] == "rect":
                 try:
@@ -360,6 +417,89 @@ class Browser:
             )
         except Exception:
             pass
+
+    def draw_image_placeholder(self, item):
+        try:
+            self.canvas.create_rectangle(
+                item["x"], item["y"] - self.scroll_y,
+                item["x"] + item["w"], item["y"] + item["h"] - self.scroll_y,
+                outline="#cccccc", fill="#f4f4f4"
+            )
+        except Exception:
+            pass
+        alt = item.get("alt") or ""
+        if alt:
+            font = self.get_font(item["font_size"], item["font_weight"], item["font_style"])
+            try:
+                self.canvas.create_text(
+                    item["x"] + 4, item["y"] + 4 - self.scroll_y,
+                    text=alt, font=font, fill="#666666", anchor="nw"
+                )
+            except Exception:
+                pass
+
+    def resolve_image_url(self, src):
+        if src.startswith("//"):
+            scheme, host, port, path = parse_url(self.url)
+            return f"{scheme}:{src}"
+        return self.resolve_url(src)
+
+    def decode_data_uri(self, src):
+        header, _, data = src[5:].partition(",")
+        if "base64" in header:
+            return base64.b64decode(data)
+        return unquote_to_bytes(data)
+
+    def start_image_load(self, node):
+        src = node.attributes.get("src", "")
+        if not src:
+            self.image_failed.add(node)
+            return
+        self.image_pending.add(node)
+        threading.Thread(target=self.fetch_image, args=(node, src), daemon=True).start()
+        if not self.image_poll_active:
+            self.image_poll_active = True
+            self.root.after(50, self.check_image_queue)
+
+    def fetch_image(self, node, src):
+        try:
+            if src.startswith("data:"):
+                raw = self.decode_data_uri(src)
+            else:
+                status, headers, raw = fetch(self.resolve_image_url(src))
+            self.image_queue.put((node, raw, None))
+        except Exception as e:
+            self.image_queue.put((node, None, e))
+
+    def check_image_queue(self):
+        self.image_poll_active = False
+        changed = False
+        while True:
+            try:
+                node, raw, error = self.image_queue.get_nowait()
+            except queue.Empty:
+                break
+            self.image_pending.discard(node)
+            if error or not raw:
+                self.image_failed.add(node)
+                continue
+            try:
+                photo = tkinter.PhotoImage(data=base64.b64encode(raw).decode("ascii"))
+            except Exception:
+                self.image_failed.add(node)
+                continue
+            max_w = max(1, self.canvas.winfo_width() - 20)
+            if photo.width() > max_w:
+                photo = photo.subsample(photo.width() // max_w + 1)
+            node.render_w = photo.width()
+            node.render_h = photo.height()
+            self.images[node] = photo
+            changed = True
+        if self.image_pending and not self.image_poll_active:
+            self.image_poll_active = True
+            self.root.after(50, self.check_image_queue)
+        if changed and self.dom:
+            self.layout_and_paint(reset_scroll=False)
 
     def on_click(self, event):
         click_x = event.x

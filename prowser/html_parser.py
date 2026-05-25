@@ -61,6 +61,7 @@ class HTMLParser:
         self.body = body
         self.unfinished = []
         self.void_tags = {"meta", "link", "br", "hr", "img", "input"}
+        self.rawtext_tags = {"script", "style"}
 
     def parse(self):
         i = 0
@@ -97,7 +98,20 @@ class HTMLParser:
                         tag_name = parts[0].lower()
                         attr_str = parts[1] if len(parts) > 1 else ""
                         attrs = parse_attributes(attr_str)
-                        self.add_tag(tag_name, attrs)
+                        if tag_name in self.rawtext_tags and not tag_content.endswith("/"):
+                            self.add_tag(tag_name, attrs)
+                            close = "</" + tag_name
+                            end_idx = self.body.lower().find(close, i)
+                            if end_idx == -1:
+                                self.add_text_raw(self.body[i:])
+                                i = len(self.body)
+                            else:
+                                self.add_text_raw(self.body[i:end_idx])
+                                gt = self.body.find(">", end_idx)
+                                i = gt + 1 if gt != -1 else len(self.body)
+                            self.close_tag(tag_name)
+                        else:
+                            self.add_tag(tag_name, attrs)
             else:
                 end = self.body.find("<", i)
                 if end == -1:
@@ -119,6 +133,14 @@ class HTMLParser:
 
     def add_text(self, text):
         if not text.strip():
+            return
+        node = Text(text)
+        if self.unfinished:
+            self.unfinished[-1].children.append(node)
+            node.parent = self.unfinished[-1]
+
+    def add_text_raw(self, text):
+        if not text:
             return
         node = Text(text)
         if self.unfinished:

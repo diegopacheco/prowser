@@ -29,6 +29,15 @@ def parse_px(val, default=0):
             return default
     return default
 
+def parse_dimension(val):
+    if not val:
+        return 0
+    val = val.strip().lower().replace("px", "")
+    try:
+        return int(float(val))
+    except ValueError:
+        return 0
+
 class BlockLayout:
     def __init__(self, node, parent):
         self.node = node
@@ -149,6 +158,37 @@ class InlineLayout:
                     })
 
                     cursor_x += word_width + space_width
+            elif isinstance(dom_node, Element) and dom_node.tag == "img":
+                img_w = getattr(dom_node, "render_w", None)
+                img_h = getattr(dom_node, "render_h", None)
+                if img_w is None or img_h is None:
+                    img_w = parse_dimension(dom_node.attributes.get("width"))
+                    img_h = parse_dimension(dom_node.attributes.get("height"))
+                alt = unescape(dom_node.attributes.get("alt", "") or "")
+                if img_w <= 0 or img_h <= 0:
+                    alt_w, alt_h = measure_fn(alt, 16, "normal", "normal") if alt else (0, 0)
+                    img_w = max(img_w, alt_w + 12, 32)
+                    img_h = max(img_h, alt_h + 8, 24)
+                if cursor_x + img_w > self.width:
+                    cursor_x = 0
+                    cursor_y += line_height
+                    line_height = 0
+                line_height = max(line_height, img_h)
+                self.display_items.append({
+                    "x": self.x + cursor_x,
+                    "y": self.y + cursor_y,
+                    "w": img_w,
+                    "h": img_h,
+                    "text": alt,
+                    "font_size": 16,
+                    "font_weight": "normal",
+                    "font_style": "normal",
+                    "color": dom_node.style.get("color", "#000000"),
+                    "text_decoration": "none",
+                    "node": dom_node,
+                    "image": True
+                })
+                cursor_x += img_w + 4
             elif isinstance(dom_node, Element) and dom_node.tag == "input":
                 input_type = dom_node.attributes.get("type", "text").lower()
                 if input_type == "hidden":
@@ -208,6 +248,21 @@ class InlineLayout:
             })
 
         for item in self.display_items:
+            if item.get("image"):
+                display_list.append({
+                    "type": "image",
+                    "x": item["x"],
+                    "y": item["y"],
+                    "w": item["w"],
+                    "h": item["h"],
+                    "alt": item["text"],
+                    "font_size": item["font_size"],
+                    "font_weight": item["font_weight"],
+                    "font_style": item["font_style"],
+                    "color": item["color"],
+                    "node": item["node"]
+                })
+                continue
             if item.get("control"):
                 display_list.append({
                     "type": "control",
