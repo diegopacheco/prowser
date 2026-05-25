@@ -2,6 +2,7 @@ from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style
 from prowser.layout import build_layout_tree
 from prowser.browser import Browser
+from prowser.network import decode_chunked, get_charset
 
 def test_html_parser():
     html = "<html><body><h1>Title</h1><p>Paragraph <a href='/link'>Link</a></p></body></html>"
@@ -73,6 +74,41 @@ def test_layout_engine():
     assert body_layout.width == 780
     print("Layout engine tests passed")
 
+def test_hidden_nodes_do_not_render():
+    html = "<html><head><title>Hidden</title><script>secret()</script></head><body><p>Visible</p></body></html>"
+    dom = HTMLParser(html).parse()
+    compute_style(dom, parse_css(""))
+    tree = build_layout_tree(dom)
+    tree.layout(0, 0, 800, lambda text, size, weight, style: (len(text) * 8, 16))
+    display = []
+    tree.paint(display)
+    text = " ".join(item["text"] for item in display if item["type"] == "text")
+    assert "Visible" in text
+    assert "Hidden" not in text
+    assert "secret" not in text
+    print("Hidden node tests passed")
+
+def test_input_rendering():
+    html = "<html><body><form><input name='q'><input type='submit' value='Search'></form></body></html>"
+    dom = HTMLParser(html).parse()
+    compute_style(dom, parse_css(""))
+    tree = build_layout_tree(dom)
+    tree.layout(0, 0, 800, lambda text, size, weight, style: (len(text) * 8, 16))
+    display = []
+    tree.paint(display)
+    rects = [item for item in display if item["type"] == "rect" and item.get("outline")]
+    text = " ".join(item["text"] for item in display if item["type"] == "text")
+    assert len(rects) == 2
+    assert "Search" in text
+    print("Input rendering tests passed")
+
+def test_chunked_decode():
+    body = decode_chunked(b"5\r\nHello\r\n6\r\n world\r\n0\r\n\r\n")
+    assert body == b"Hello world"
+    assert get_charset({"content-type": "text/html; charset=ISO-8859-1"}) == "ISO-8859-1"
+    assert get_charset({}) == "utf-8"
+    print("Chunked response tests passed")
+
 def test_url_normalization():
     assert Browser.normalize_url("www.google.com") == "http://www.google.com"
     assert Browser.normalize_url(" http://localhost:8000 ") == "http://localhost:8000"
@@ -84,4 +120,7 @@ if __name__ == "__main__":
     test_html_parser()
     test_css_parser()
     test_layout_engine()
+    test_hidden_nodes_do_not_render()
+    test_input_rendering()
+    test_chunked_decode()
     test_url_normalization()

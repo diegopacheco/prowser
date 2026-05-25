@@ -172,7 +172,7 @@ class Browser:
                     self.canvas.create_rectangle(
                         item["x"], item["y"] - self.scroll_y,
                         item["x"] + item["w"], item["y"] + item["h"] - self.scroll_y,
-                        fill=item["color"], outline=""
+                        fill=item["color"], outline=item.get("outline", "")
                     )
                 except Exception:
                     pass

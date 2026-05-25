@@ -1,6 +1,34 @@
 import socket
 import ssl
 
+def decode_chunked(data):
+    result = bytearray()
+    i = 0
+    while i < len(data):
+        line_end = data.find(b"\r\n", i)
+        if line_end == -1:
+            break
+        size_text = data[i:line_end].split(b";", 1)[0].strip()
+        try:
+            size = int(size_text, 16)
+        except ValueError:
+            return data
+        i = line_end + 2
+        if size == 0:
+            break
+        result.extend(data[i:i + size])
+        i += size + 2
+    return bytes(result)
+
+def get_charset(headers):
+    content_type = headers.get("content-type", "")
+    parts = content_type.split(";")
+    for part in parts[1:]:
+        key, _, value = part.strip().partition("=")
+        if key.lower() == "charset" and value:
+            return value.strip("\"'")
+    return "utf-8"
+
 def parse_url(url):
     if url.startswith("http://"):
         scheme = "http"
@@ -55,8 +83,8 @@ def request(url, redirect_limit=5):
         response.extend(chunk)
     s.close()
     
-    response_str = response.decode("utf-8", errors="replace")
-    header_part, _, body = response_str.partition("\r\n\r\n")
+    header_bytes, _, body_bytes = bytes(response).partition(b"\r\n\r\n")
+    header_part = header_bytes.decode("iso-8859-1", errors="replace")
     
     header_lines = header_part.split("\r\n")
     status_line = header_lines[0]
@@ -68,6 +96,11 @@ def request(url, redirect_limit=5):
         if ":" in line:
             k, v = line.split(":", 1)
             headers[k.strip().lower()] = v.strip()
+
+    if headers.get("transfer-encoding", "").lower() == "chunked":
+        body_bytes = decode_chunked(body_bytes)
+
+    body = body_bytes.decode(get_charset(headers), errors="replace")
             
     if status_code in (301, 302, 303, 307, 308):
         if "location" in headers:

@@ -1,9 +1,17 @@
+from html import unescape
 from prowser.html_parser import Element, Text
 
 BLOCK_TAGS = {
     "html", "body", "div", "h1", "h2", "p", 
-    "ul", "li", "section", "nav", "header", "footer"
+    "ul", "li", "section", "nav", "header", "footer", "form", "center"
 }
+
+HIDDEN_TAGS = {
+    "head", "script", "style", "title", "meta", "link", "noscript"
+}
+
+def is_hidden_node(node):
+    return isinstance(node, Element) and node.tag in HIDDEN_TAGS
 
 def is_block_node(node):
     if isinstance(node, Text):
@@ -102,8 +110,10 @@ class InlineLayout:
 
         def recurse_inline(dom_node):
             nonlocal cursor_x, cursor_y, line_height
+            if is_hidden_node(dom_node):
+                return
             if isinstance(dom_node, Text):
-                words = dom_node.text.split(" ")
+                words = unescape(dom_node.text).split(" ")
                 for idx, word in enumerate(words):
                     if not word and idx > 0 and idx < len(words) - 1:
                         continue
@@ -139,6 +149,42 @@ class InlineLayout:
                     })
 
                     cursor_x += word_width + space_width
+            elif isinstance(dom_node, Element) and dom_node.tag == "input":
+                input_type = dom_node.attributes.get("type", "text").lower()
+                if input_type == "hidden":
+                    return
+                label = dom_node.attributes.get("value") or dom_node.attributes.get("placeholder") or dom_node.attributes.get("aria-label") or ""
+                label = unescape(label)
+                font_size = parse_px(dom_node.style.get("font-size", "16px"), 16)
+                font_weight = dom_node.style.get("font-weight", "normal")
+                font_style = dom_node.style.get("font-style", "normal")
+                color = dom_node.style.get("color", "#000000")
+                label_width, label_height = measure_fn(label, font_size, font_weight, font_style)
+                if input_type in ("submit", "button"):
+                    item_width = max(90, label_width + 24)
+                else:
+                    item_width = max(280, label_width + 24)
+                item_height = max(28, label_height + 10)
+                if cursor_x + item_width > self.width:
+                    cursor_x = 0
+                    cursor_y += line_height
+                    line_height = 0
+                line_height = max(line_height, item_height)
+                self.display_items.append({
+                    "x": self.x + cursor_x,
+                    "y": self.y + cursor_y,
+                    "w": item_width,
+                    "h": item_height,
+                    "text": label,
+                    "font_size": font_size,
+                    "font_weight": font_weight,
+                    "font_style": font_style,
+                    "color": color,
+                    "text_decoration": "none",
+                    "node": dom_node,
+                    "control": True
+                })
+                cursor_x += item_width + 8
             else:
                 for child in dom_node.children:
                     recurse_inline(child)
@@ -161,10 +207,20 @@ class InlineLayout:
             })
 
         for item in self.display_items:
+            if item.get("control"):
+                display_list.append({
+                    "type": "rect",
+                    "x": item["x"],
+                    "y": item["y"],
+                    "w": item["w"],
+                    "h": item["h"],
+                    "color": "#f8f8f8",
+                    "outline": "#9a9a9a"
+                })
             display_list.append({
                 "type": "text",
-                "x": item["x"],
-                "y": item["y"],
+                "x": item["x"] + (8 if item.get("control") else 0),
+                "y": item["y"] + (5 if item.get("control") else 0),
                 "text": item["text"],
                 "font_size": item["font_size"],
                 "font_weight": item["font_weight"],
@@ -183,13 +239,16 @@ class InlineLayout:
                 })
 
 def build_layout_tree(node, parent=None):
+    if is_hidden_node(node):
+        return None
     if is_block_node(node):
         box = BlockLayout(node, parent)
-        has_block_child = any(is_block_node(c) for c in node.children)
+        visible_children = [c for c in node.children if not is_hidden_node(c)]
+        has_block_child = any(is_block_node(c) for c in visible_children)
 
         if has_block_child:
             current_inline_group = []
-            for child in node.children:
+            for child in visible_children:
                 if is_block_node(child):
                     if current_inline_group:
                         anon_node = Element("anon", {})
@@ -197,7 +256,9 @@ def build_layout_tree(node, parent=None):
                         anon_box = InlineLayout(anon_node, box, current_inline_group)
                         box.children.append(anon_box)
                         current_inline_group = []
-                    box.children.append(build_layout_tree(child, box))
+                    child_box = build_layout_tree(child, box)
+                    if child_box:
+                        box.children.append(child_box)
                 else:
                     current_inline_group.append(child)
             if current_inline_group:
@@ -206,8 +267,8 @@ def build_layout_tree(node, parent=None):
                 anon_box = InlineLayout(anon_node, box, current_inline_group)
                 box.children.append(anon_box)
         else:
-            if node.children:
-                inline_box = InlineLayout(node, box, node.children)
+            if visible_children:
+                inline_box = InlineLayout(node, box, visible_children)
                 box.children.append(inline_box)
         return box
     else:
