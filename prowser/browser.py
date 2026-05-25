@@ -24,10 +24,10 @@ def get_form_node(node):
 def collect_form_params(form, trigger, text_values):
     params = []
     def collect(n):
-        if isinstance(n, Element) and n.tag == "input":
+        if isinstance(n, Element) and n.tag in ("input", "textarea"):
             name = n.attributes.get("name")
             if name:
-                itype = n.attributes.get("type", "text").lower()
+                itype = "text" if n.tag == "textarea" else n.attributes.get("type", "text").lower()
                 if n in text_values:
                     params.append((name, text_values[n]))
                 elif itype in BUTTON_INPUT_TYPES:
@@ -396,13 +396,19 @@ class Browser:
             except Exception:
                 pass
             text = self.input_value(item)
+            text_fill = "#000000"
+            is_placeholder = False
+            if not text and not focused and item.get("label"):
+                text = item["label"]
+                text_fill = "#888888"
+                is_placeholder = True
             max_text_w = item["w"] - 12
             while text and font.measure(text) > max_text_w:
-                text = text[1:]
+                text = text[:-1] if is_placeholder else text[1:]
             text_x = item["x"] + 6
             text_y = item["y"] + (item["h"] - font.metrics("linespace")) // 2 - self.scroll_y
             try:
-                self.canvas.create_text(text_x, text_y, text=text, font=font, fill="#000000", anchor="nw")
+                self.canvas.create_text(text_x, text_y, text=text, font=font, fill=text_fill, anchor="nw")
             except Exception:
                 pass
             if focused:

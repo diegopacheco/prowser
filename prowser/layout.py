@@ -189,8 +189,11 @@ class InlineLayout:
                     "image": True
                 })
                 cursor_x += img_w + 4
-            elif isinstance(dom_node, Element) and dom_node.tag == "input":
-                input_type = dom_node.attributes.get("type", "text").lower()
+            elif isinstance(dom_node, Element) and dom_node.tag in ("input", "textarea"):
+                if dom_node.tag == "textarea":
+                    input_type = "text"
+                else:
+                    input_type = dom_node.attributes.get("type", "text").lower()
                 if input_type == "hidden":
                     return
                 label = dom_node.attributes.get("value") or dom_node.attributes.get("placeholder") or dom_node.attributes.get("aria-label") or ""
