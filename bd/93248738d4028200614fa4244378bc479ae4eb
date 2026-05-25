@@ -1,0 +1,28 @@
+prowser/browser.py
+  s_88d33490a09e66::t_44bb19d9e89997 514,517-520,523-526
+  s_88d33490a09e66::t_ef0fa3f761f13d 553-574
+  s_88d33490a09e66::t_161790d72f74fe 181-182
+  s_88d33490a09e66::t_c0b8b4cab7c52a 103,106
+  s_88d33490a09e66::t_91ab6cbb7c924c 90-91
+  s_88d33490a09e66::t_84553daf07c85c 379-383,386-387,389-399,401-408,410,414
+  s_88d33490a09e66::t_2622742dfe1327 597
+  s_88d33490a09e66::t_6296165d5895b4 540-543
+  s_88d33490a09e66::t_cc883723784cde 134-135
+  s_88d33490a09e66::t_0a1c3e8259a041 400,409
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "bd93248738d4028200614fa4244378bc479ae4eb",
+  "prompts": {},
+  "sessions": {
+    "s_88d33490a09e66": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c55e575a-c47f-4661-896d-4739be261181",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
