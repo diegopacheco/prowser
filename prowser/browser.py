@@ -20,22 +20,18 @@ class Browser:
         self.root.title("Prowser")
         self.root.geometry("800x600")
 
-        self.nav_frame = tkinter.Frame(self.root, bg="#f3f3f3")
+        self.nav_frame = tkinter.Frame(self.root, bg="#eeeeee")
         self.nav_frame.pack(fill="x")
-        self.nav_frame.columnconfigure(1, weight=1)
 
-        self.address_label = tkinter.Label(self.nav_frame, text="URL", bg="#f3f3f3", fg="#000000")
-        self.address_label.grid(row=0, column=0, padx=(8, 4), pady=7, sticky="w")
+        self.address_label = tkinter.Label(self.nav_frame, text="URL", bg="#eeeeee", fg="#000000")
+        self.address_label.pack(side="left", padx=(8, 4), pady=6)
 
-        self.address_box = tkinter.Frame(self.nav_frame, bg="#ffffff", highlightbackground="#9a9a9a", highlightthickness=1, bd=1, relief="solid")
-        self.address_box.grid(row=0, column=1, padx=(0, 6), pady=6, sticky="ew")
+        self.go_button = tkinter.Button(self.nav_frame, text="Go", command=self.go)
+        self.go_button.pack(side="right", padx=(4, 8), pady=4)
 
-        self.address_entry = tkinter.Entry(self.address_box, width=60, bg="#ffffff", fg="#000000", insertbackground="#000000", relief="flat", bd=0)
-        self.address_entry.pack(fill="x", expand=True, padx=6, pady=3)
+        self.address_entry = tkinter.Entry(self.nav_frame, width=80, bg="#ffffff", fg="#000000", insertbackground="#000000", relief="sunken", bd=2)
+        self.address_entry.pack(side="left", fill="x", expand=True, padx=(0, 4), pady=5)
         self.address_entry.bind("<Return>", lambda e: self.go())
-
-        self.go_button = tkinter.Button(self.nav_frame, text="Go", command=self.go, highlightbackground="#f3f3f3")
-        self.go_button.grid(row=0, column=2, padx=(0, 8), pady=5, sticky="e")
 
         self.canvas = tkinter.Canvas(self.root, bg="#ffffff")
         self.canvas.pack(fill="both", expand=True)
@@ -63,8 +59,9 @@ class Browser:
         self.root.bind("<Up>", lambda e: self.scroll(-40))
         self.root.bind("<space>", lambda e: self.scroll(300))
 
+        self.set_address("http://www.google.com")
         self.address_entry.focus_set()
-        self.load_start_page()
+        self.root.after(0, self.load_start_page)
 
     def on_resize(self, event):
         if event.width != self.last_width or event.height != self.last_height:
