@@ -83,13 +83,28 @@ class Browser:
         self.render()
 
     def go(self):
-        url = self.address_entry.get().strip()
+        url = self.normalize_url(self.address_entry.get())
         if not url:
             return
-        if not (url.startswith("http://") or url.startswith("https://")):
-            url = "http://" + url
-            self.address_entry.delete(0, tkinter.END)
-            self.address_entry.insert(0, url)
+        self.set_address(url)
+        self.load(url)
+
+    @staticmethod
+    def normalize_url(url):
+        url = url.strip()
+        if url and not (url.startswith("http://") or url.startswith("https://")):
+            return "http://" + url
+        return url
+
+    def set_address(self, url):
+        self.address_entry.delete(0, tkinter.END)
+        self.address_entry.insert(0, url)
+
+    def open_url(self, url):
+        url = self.normalize_url(url)
+        if not url:
+            return
+        self.set_address(url)
         self.load(url)
 
     def load(self, url):

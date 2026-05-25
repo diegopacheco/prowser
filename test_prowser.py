@@ -1,6 +1,7 @@
 from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style
 from prowser.layout import build_layout_tree
+from prowser.browser import Browser
 
 def test_html_parser():
     html = "<html><body><h1>Title</h1><p>Paragraph <a href='/link'>Link</a></p></body></html>"
@@ -72,7 +73,15 @@ def test_layout_engine():
     assert body_layout.width == 780
     print("Layout engine tests passed")
 
+def test_url_normalization():
+    assert Browser.normalize_url("www.google.com") == "http://www.google.com"
+    assert Browser.normalize_url(" http://localhost:8000 ") == "http://localhost:8000"
+    assert Browser.normalize_url("https://google.com") == "https://google.com"
+    assert Browser.normalize_url(" ") == ""
+    print("URL normalization tests passed")
+
 if __name__ == "__main__":
     test_html_parser()
     test_css_parser()
     test_layout_engine()
+    test_url_normalization()
