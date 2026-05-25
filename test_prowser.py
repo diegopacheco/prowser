@@ -129,6 +129,31 @@ def test_form_submission_params():
     assert all(name != "btnI" for name, _ in on_button)
     print("Form submission tests passed")
 
+def test_js_engine():
+    try:
+        from prowser.js_engine import JSEngine, tree_to_list
+    except Exception:
+        print("JS engine unavailable (dukpy not installed), skipping JS test")
+        return
+    html = "<html><body><div id='x' class='c'>old</div><a href='/y'>link</a></body></html>"
+    dom = HTMLParser(html).parse()
+    class FakeBrowser:
+        def __init__(self, dom):
+            self.dom = dom
+            self.changed = False
+        def on_dom_changed(self):
+            self.changed = True
+    fb = FakeBrowser(dom)
+    js = JSEngine(fb)
+    js.run("var d = document.getElementById('x'); d.innerHTML = 'new content';")
+    div = [n for n in tree_to_list(dom, []) if isinstance(n, Element) and n.attributes.get("id") == "x"][0]
+    assert fb.changed
+    assert "".join(c.text for c in div.children if isinstance(c, Text)) == "new content"
+    assert len(js.query_selector_all("a")) == 1
+    assert len(js.query_selector_all(".c")) == 1
+    assert js.get_attribute(js.get_handle(div), "class") == "c"
+    print("JS engine tests passed")
+
 def test_chunked_decode():
     body = decode_chunked(b"5\r\nHello\r\n6\r\n world\r\n0\r\n\r\n")
     assert body == b"Hello world"
@@ -150,5 +175,6 @@ if __name__ == "__main__":
     test_hidden_nodes_do_not_render()
     test_input_rendering()
     test_form_submission_params()
+    test_js_engine()
     test_chunked_decode()
     test_url_normalization()

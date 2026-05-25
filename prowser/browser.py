@@ -10,6 +10,11 @@ from prowser.network import request, fetch, parse_url
 from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style, DEFAULT_STYLESHEET
 
+try:
+    from prowser.js_engine import JSEngine
+except Exception:
+    JSEngine = None
+
 TEXT_INPUT_TYPES = {"text", "search", "email", "url", "tel", "password", "number", ""}
 BUTTON_INPUT_TYPES = {"submit", "button", "reset", "image"}
 
@@ -73,8 +78,11 @@ class Browser:
         self.address_entry.pack(side="left", fill="x", expand=True, padx=(0, 4), pady=5)
         self.address_entry.bind("<Return>", lambda e: self.go())
 
+        self.scrollbar = tkinter.Scrollbar(self.root, orient="vertical", command=self.on_scrollbar)
+        self.scrollbar.pack(side="right", fill="y")
+
         self.canvas = tkinter.Canvas(self.root, bg="#ffffff")
-        self.canvas.pack(fill="both", expand=True)
+        self.canvas.pack(side="left", fill="both", expand=True)
 
         self.font_cache = {}
         self.dom = None
@@ -96,6 +104,8 @@ class Browser:
         self.image_poll_active = False
         self.history = []
         self.history_index = -1
+        self.js = None
+        self.rules = []
 
         self.last_width = 800
         self.last_height = 600
@@ -143,6 +153,29 @@ class Browser:
         max_scroll = max(0, doc_height - view_height)
         self.scroll_y = max(0, min(self.scroll_y + amount, max_scroll))
         self.render()
+
+    def on_scrollbar(self, *args):
+        if not self.layout_tree:
+            return
+        doc_height = self.layout_tree.height
+        view_height = self.canvas.winfo_height()
+        max_scroll = max(0, doc_height - view_height)
+        if args[0] == "moveto":
+            self.scroll_y = int(max(0, min(float(args[1]) * doc_height, max_scroll)))
+        elif args[0] == "scroll":
+            step = view_height if args[2] == "pages" else 40
+            self.scroll_y = max(0, min(self.scroll_y + int(args[1]) * step, max_scroll))
+        self.render()
+
+    def update_scrollbar(self):
+        doc_height = self.layout_tree.height if self.layout_tree else 0
+        view_height = self.canvas.winfo_height()
+        if doc_height <= view_height or doc_height <= 0:
+            self.scrollbar.set(0, 1)
+            return
+        first = self.scroll_y / doc_height
+        last = min(1.0, (self.scroll_y + view_height) / doc_height)
+        self.scrollbar.set(first, last)
 
     def go(self):
         url = self.normalize_url(self.address_entry.get())
@@ -231,16 +264,17 @@ class Browser:
             self.show_error(f"Error loading {url}: {error}")
             return
         try:
-            self.render_html(body)
+            self.render_html(body, run_scripts=True)
         except Exception as e:
             self.show_error(f"Error rendering {url}: {e}")
 
-    def render_html(self, body):
+    def render_html(self, body, run_scripts=False):
         parser = HTMLParser(body)
         self.dom = parser.parse()
+        self.js = None
 
         rules = parse_css(DEFAULT_STYLESHEET)
-        
+
         style_content = []
         def find_style_tags(node):
             if isinstance(node, Element) and node.tag == "style":
@@ -254,8 +288,36 @@ class Browser:
         for css in style_content:
             rules.extend(parse_css(css))
 
+        self.rules = rules
         compute_style(self.dom, rules)
+        if run_scripts and JSEngine is not None:
+            self.run_scripts()
         self.layout_and_paint()
+
+    def run_scripts(self):
+        scripts = []
+        def find_scripts(node):
+            if isinstance(node, Element) and node.tag == "script" and "src" not in node.attributes:
+                text = "".join(c.text for c in node.children if isinstance(c, Text))
+                if text.strip():
+                    scripts.append(text)
+            for child in node.children:
+                find_scripts(child)
+        find_scripts(self.dom)
+        if not scripts:
+            return
+        try:
+            self.js = JSEngine(self)
+        except Exception as e:
+            print(f"[js] init error: {e}", file=sys.stderr, flush=True)
+            self.js = None
+            return
+        for code in scripts:
+            self.js.run(code)
+
+    def on_dom_changed(self):
+        compute_style(self.dom, self.rules)
+        self.layout_and_paint(reset_scroll=False)
 
     def show_message(self, message):
         message_html = f"<html><body><p>{message}</p></body></html>"
@@ -364,6 +426,7 @@ class Browser:
                     )
                 except Exception:
                     pass
+        self.update_scrollbar()
 
     def font_key(self, font_size, font_weight, font_style):
         weight_map = "bold" if font_weight == "bold" else "normal"
@@ -547,6 +610,17 @@ class Browser:
                 if item["x"] <= click_x <= item["x"] + item["w"] and item["y"] <= click_y <= item["y"] + item["h"]:
                     clicked_node = item["node"]
                     break
+
+        if clicked_node and self.js:
+            prevented = False
+            node = clicked_node
+            while node:
+                if self.js.dispatch_event(node, "click"):
+                    prevented = True
+                node = node.parent
+            if prevented:
+                self.render()
+                return
 
         if clicked_node:
             anchor = get_anchor_node(clicked_node)
