@@ -1,7 +1,7 @@
 from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style
 from prowser.layout import build_layout_tree
-from prowser.browser import Browser
+from prowser.browser import Browser, collect_form_params, get_form_node
 from prowser.network import decode_chunked, get_charset
 
 def test_html_parser():
@@ -96,11 +96,38 @@ def test_input_rendering():
     tree.layout(0, 0, 800, lambda text, size, weight, style: (len(text) * 8, 16))
     display = []
     tree.paint(display)
-    rects = [item for item in display if item["type"] == "rect" and item.get("outline")]
-    text = " ".join(item["text"] for item in display if item["type"] == "text")
-    assert len(rects) == 2
-    assert "Search" in text
+    controls = [item for item in display if item["type"] == "control"]
+    types = {item["input_type"] for item in controls}
+    labels = " ".join(item["label"] for item in controls)
+    assert len(controls) == 2
+    assert "submit" in types
+    assert "Search" in labels
     print("Input rendering tests passed")
+
+def test_form_submission_params():
+    html = "<html><body><form action='/search'><input type='hidden' name='hl' value='en'><input name='q'><input type='submit' name='btnG' value='Google Search'><input type='submit' name='btnI' value='Lucky'></form></body></html>"
+    dom = HTMLParser(html).parse()
+    inputs = []
+    def walk(n):
+        if isinstance(n, Element) and n.tag == "input":
+            inputs.append(n)
+        for c in n.children:
+            walk(c)
+    walk(dom)
+    by_name = {i.attributes.get("name"): i for i in inputs}
+    q = by_name["q"]
+    form = get_form_node(q)
+    assert form.attributes["action"] == "/search"
+
+    on_enter = collect_form_params(form, q, {q: "cats"})
+    assert ("hl", "en") in on_enter
+    assert ("q", "cats") in on_enter
+    assert all(name not in ("btnG", "btnI") for name, _ in on_enter)
+
+    on_button = collect_form_params(form, by_name["btnG"], {q: "cats"})
+    assert ("btnG", "Google Search") in on_button
+    assert all(name != "btnI" for name, _ in on_button)
+    print("Form submission tests passed")
 
 def test_chunked_decode():
     body = decode_chunked(b"5\r\nHello\r\n6\r\n world\r\n0\r\n\r\n")
@@ -122,5 +149,6 @@ if __name__ == "__main__":
     test_layout_engine()
     test_hidden_nodes_do_not_render()
     test_input_rendering()
+    test_form_submission_params()
     test_chunked_decode()
     test_url_normalization()

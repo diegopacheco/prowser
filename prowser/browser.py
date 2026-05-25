@@ -4,9 +4,40 @@ import threading
 import tkinter
 import tkinter.font
 from html import escape
+from urllib.parse import urlencode
 from prowser.network import request, parse_url
 from prowser.html_parser import HTMLParser, Element, Text
 from prowser.css_parser import parse_css, compute_style, DEFAULT_STYLESHEET
+
+TEXT_INPUT_TYPES = {"text", "search", "email", "url", "tel", "password", "number", ""}
+BUTTON_INPUT_TYPES = {"submit", "button", "reset", "image"}
+
+def get_form_node(node):
+    curr = node
+    while curr:
+        if isinstance(curr, Element) and curr.tag == "form":
+            return curr
+        curr = curr.parent
+    return None
+
+def collect_form_params(form, trigger, text_values):
+    params = []
+    def collect(n):
+        if isinstance(n, Element) and n.tag == "input":
+            name = n.attributes.get("name")
+            if name:
+                itype = n.attributes.get("type", "text").lower()
+                if n in text_values:
+                    params.append((name, text_values[n]))
+                elif itype in BUTTON_INPUT_TYPES:
+                    if n is trigger:
+                        params.append((name, n.attributes.get("value") or ""))
+                else:
+                    params.append((name, n.attributes.get("value") or ""))
+        for c in n.children:
+            collect(c)
+    collect(form)
+    return params
 
 def get_anchor_node(node):
     curr = node
@@ -49,6 +80,8 @@ class Browser:
         self.loading = False
         self.color_cache = {}
 
+        self.input_widgets = {}
+
         self.last_width = 800
         self.last_height = 600
 
@@ -58,9 +91,9 @@ class Browser:
         self.canvas.bind("<Button-4>", lambda e: self.scroll(-40))
         self.canvas.bind("<Button-5>", lambda e: self.scroll(40))
 
-        self.root.bind("<Down>", lambda e: self.scroll(40))
-        self.root.bind("<Up>", lambda e: self.scroll(-40))
-        self.root.bind("<space>", lambda e: self.scroll(300))
+        self.root.bind("<Down>", lambda e: self.scroll_key(40))
+        self.root.bind("<Up>", lambda e: self.scroll_key(-40))
+        self.root.bind("<space>", lambda e: self.scroll_key(300))
 
         self.set_address("http://www.google.com")
         self.address_entry.focus_set()
@@ -79,6 +112,11 @@ class Browser:
                 self.scroll(-event.delta * 20)
             else:
                 self.scroll(-int(event.delta / 120) * 40)
+
+    def scroll_key(self, amount):
+        if isinstance(self.root.focus_get(), tkinter.Entry):
+            return
+        self.scroll(amount)
 
     def scroll(self, amount):
         doc_height = self.layout_tree.height if self.layout_tree else 0
@@ -225,8 +263,19 @@ class Browser:
 
     def render(self):
         self.canvas.delete("all")
+        active_inputs = {
+            item["node"]
+            for item in self.display_list
+            if item["type"] == "control" and item["input_type"] in TEXT_INPUT_TYPES
+        }
+        for node in list(self.input_widgets):
+            if node not in active_inputs:
+                self.input_widgets[node].destroy()
+                del self.input_widgets[node]
         for item in self.display_list:
-            if item["type"] == "rect":
+            if item["type"] == "control":
+                self.draw_control(item)
+            elif item["type"] == "rect":
                 try:
                     fill_color = self.normalize_color(item["color"], "")
                     outline_color = self.normalize_color(item.get("outline", ""), "")
@@ -261,9 +310,66 @@ class Browser:
                 except Exception:
                     pass
 
+    def font_key(self, font_size, font_weight, font_style):
+        weight_map = "bold" if font_weight == "bold" else "normal"
+        slant_map = "italic" if font_style == "italic" else "roman"
+        return (font_size, weight_map, slant_map)
+
+    def get_font(self, font_size, font_weight, font_style):
+        key = self.font_key(font_size, font_weight, font_style)
+        if key not in self.font_cache:
+            self.get_font_metrics(font_size, font_weight, font_style, "")
+        return self.font_cache[key]
+
+    def make_input_entry(self, item):
+        font = self.get_font(item["font_size"], item["font_weight"], item["font_style"])
+        entry = tkinter.Entry(self.canvas, font=font, relief="solid", bd=1,
+                              bg="#ffffff", fg="#000000", insertbackground="#000000")
+        value = item["node"].attributes.get("value") or ""
+        if value:
+            entry.insert(0, value)
+        entry.bind("<Return>", lambda e, n=item["node"]: self.submit_form(n))
+        return entry
+
+    def draw_control(self, item):
+        if item["input_type"] in TEXT_INPUT_TYPES:
+            entry = self.input_widgets.get(item["node"])
+            if entry is None:
+                entry = self.make_input_entry(item)
+                self.input_widgets[item["node"]] = entry
+            self.canvas.create_window(
+                item["x"], item["y"] - self.scroll_y,
+                anchor="nw", window=entry,
+                width=item["w"], height=item["h"]
+            )
+            return
+        try:
+            self.canvas.create_rectangle(
+                item["x"], item["y"] - self.scroll_y,
+                item["x"] + item["w"], item["y"] + item["h"] - self.scroll_y,
+                fill="#f0f0f0", outline="#9a9a9a"
+            )
+        except Exception:
+            pass
+        font = self.get_font(item["font_size"], item["font_weight"], item["font_style"])
+        text_color = self.normalize_color(item["color"], "#000000")
+        try:
+            self.canvas.create_text(
+                item["x"] + 8, item["y"] + 5 - self.scroll_y,
+                text=item["label"], font=font, fill=text_color, anchor="nw"
+            )
+        except Exception:
+            pass
+
     def on_click(self, event):
         click_x = event.x
         click_y = event.y + self.scroll_y
+
+        for item in self.display_list:
+            if item["type"] == "control" and item["input_type"] in BUTTON_INPUT_TYPES:
+                if item["x"] <= click_x <= item["x"] + item["w"] and item["y"] <= click_y <= item["y"] + item["h"]:
+                    self.submit_form(item["node"])
+                    return
 
         clicked_node = None
         for item in self.display_list:
@@ -302,6 +408,20 @@ class Browser:
                 return f"{scheme}://{host}:{port}{parent_path}{href}"
             else:
                 return f"{scheme}://{host}:{port}{parent_path}/{href}"
+
+    def submit_form(self, node):
+        form = get_form_node(node)
+        if not form:
+            return
+        text_values = {n: w.get() for n, w in self.input_widgets.items()}
+        params = collect_form_params(form, node, text_values)
+        action = form.attributes.get("action") or ""
+        url = self.resolve_url(action) if action else self.url
+        query = urlencode(params)
+        if query:
+            url = url + ("&" if "?" in url else "?") + query
+        self.set_address(url)
+        self.load(url)
 
     def show_error(self, message):
         print(f"[prowser] {message}", file=sys.stderr, flush=True)

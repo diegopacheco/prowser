@@ -182,7 +182,8 @@ class InlineLayout:
                     "color": color,
                     "text_decoration": "none",
                     "node": dom_node,
-                    "control": True
+                    "control": True,
+                    "input_type": input_type
                 })
                 cursor_x += item_width + 8
             else:
@@ -209,18 +210,24 @@ class InlineLayout:
         for item in self.display_items:
             if item.get("control"):
                 display_list.append({
-                    "type": "rect",
+                    "type": "control",
                     "x": item["x"],
                     "y": item["y"],
                     "w": item["w"],
                     "h": item["h"],
-                    "color": "#f8f8f8",
-                    "outline": "#9a9a9a"
+                    "input_type": item.get("input_type", "text"),
+                    "label": item["text"],
+                    "font_size": item["font_size"],
+                    "font_weight": item["font_weight"],
+                    "font_style": item["font_style"],
+                    "color": item["color"],
+                    "node": item["node"]
                 })
+                continue
             display_list.append({
                 "type": "text",
-                "x": item["x"] + (8 if item.get("control") else 0),
-                "y": item["y"] + (5 if item.get("control") else 0),
+                "x": item["x"],
+                "y": item["y"],
                 "text": item["text"],
                 "font_size": item["font_size"],
                 "font_weight": item["font_weight"],
